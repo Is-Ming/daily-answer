@@ -4,6 +4,9 @@
 # 规格与变更（内部工作流文档，不入库）
 /openspec
 
+# 本机部署工具（含服务器地址，不入库）
+tools/push-data.ps1
+
 # 依赖与构建产物
 node_modules/
 dist/
