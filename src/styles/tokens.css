@@ -1,0 +1,33 @@
+/* 设计 token——视觉体系变量 */
+
+:root {
+  --c-primary: #0d828e;
+  --c-primary-deep: #08606a;
+  --c-ok: #1d9c9c;
+  --c-mis: #de7525;
+
+  --c-text: #40484f;
+  --c-text-light: #6b7280;
+  --c-bg: #ffffff;
+  --c-bg-header: rgba(107, 114, 128, 0.05);
+  --c-border: rgba(156, 163, 175, 0.1);
+  --c-hover: rgba(107, 114, 128, 0.2);
+  --c-mask: rgba(0, 0, 0, 0.5);
+
+  --radius: 4px;
+  --font-serif: 'Songti SC', 'STSong', SimSun, Georgia, serif;
+}
+
+html.dark {
+  background: #121212;
+  --c-text: #d1d5db;
+  --c-text-light: #9ca3af;
+  --c-bg: #121212;
+  --c-bg-header: rgba(156, 163, 175, 0.06);
+  --c-border: rgba(156, 163, 175, 0.14);
+  --c-hover: rgba(156, 163, 175, 0.2);
+}
+
+.dark {
+  --c-ok: #0d8e8e;
+}

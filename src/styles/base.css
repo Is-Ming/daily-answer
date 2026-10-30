@@ -1,0 +1,92 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  color: var(--c-text);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+p {
+  text-align: left;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* ---- 动效 ---- */
+
+.shake {
+  animation: shake 0.4s;
+}
+
+@keyframes shake {
+  0% { transform: translate(1px); }
+  20% { transform: translate(-2px); }
+  40% { transform: translate(2px); }
+  60% { transform: translate(-2px); }
+  80% { transform: translate(2px); }
+  100% { transform: translate(-1px); }
+}
+
+/* 新提示淡入 */
+.fade-enter-active {
+  transition: all 1s ease;
+}
+.fade-leave-active {
+  transition: all 0.5s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  transform: translateY(10px);
+  opacity: 0;
+}
+
+/* 通用按钮 */
+.btn {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  border: none;
+  display: inline-block;
+  background: var(--c-primary);
+  color: #fff;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+.btn:hover {
+  opacity: 1;
+}
+.btn:disabled {
+  background: #6b7280;
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+.icon-btn {
+  font-size: 1.2em;
+  cursor: pointer;
+  user-select: none;
+  opacity: 0.75;
+  transition: all 200ms ease-in-out;
+}
+.icon-btn:hover {
+  opacity: 1;
+  color: var(--c-primary);
+}

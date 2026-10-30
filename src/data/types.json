@@ -1,0 +1,4 @@
+[
+  { "id": "idiom", "label": "成语", "attempts": 6, "hintCount": 7, "answerLen": [4, 4], "showLen": true, "allowAliases": false },
+  { "id": "figure", "label": "历史人物", "attempts": 7, "hintCount": 8, "answerLen": [2, 4], "showLen": true, "allowAliases": true }
+]

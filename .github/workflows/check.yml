@@ -1,0 +1,36 @@
+name: check
+
+on:
+  pull_request:
+    paths:
+      - 'seed/**'
+      - 'public/data/**'
+      - 'tools/**'
+  push:
+    branches: [main]
+    paths:
+      - 'seed/**'
+      - 'tools/**'
+
+jobs:
+  bank:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r tools/requirements.txt
+      - name: 题库校验（红灯即违规）
+        run: python tools/check.py
+      - name: 构建可复现（产物与提交一致）
+        run: |
+          python tools/build_bank.py --out /tmp/puzzles.json
+          diff <(python -c "import json;print(json.dumps(json.load(open('/tmp/puzzles.json')),ensure_ascii=False,sort_keys=True))") \
+               <(python -c "import json;print(json.dumps(json.load(open('public/data/puzzles.json')),ensure_ascii=False,sort_keys=True))")
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
