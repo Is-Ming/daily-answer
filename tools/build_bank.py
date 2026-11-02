@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """谜底题库构建器。
 
-合并 seed/ 题源（成语批次 + 人物 + 难度评分），机器校验全部硬规则，
+读取 seed/ 题源（idioms.json + figures.json，难度内联），机器校验全部硬规则，
 通过后产出 public/data/puzzles.json。
 
 - 校验任一失败：非零退出码，不产出成品。
@@ -37,19 +37,15 @@ def banned_of(word: str) -> set:
 
 
 def load(ptype: str, seed_dir: Path) -> list:
-    if ptype == "idiom":
-        files = sorted(seed_dir.glob("batch*.json"))
-    else:
-        files = [seed_dir / "figures.json", seed_dir / "figures2.json"]
+    file = seed_dir / ("idioms.json" if ptype == "idiom" else "figures.json")
     out = []
-    for f in files:
-        for e in json.loads(f.read_text(encoding="utf-8")):
-            e["_type"] = ptype
-            out.append(e)
+    for e in json.loads(file.read_text(encoding="utf-8")):
+        e["_type"] = ptype
+        out.append(e)
     return out
 
 
-def validate_entries(entries: list, diff: dict) -> list:
+def validate_entries(entries: list) -> list:
     errors = []
     seen = set()
     for e in entries:
@@ -75,20 +71,18 @@ def validate_entries(entries: list, diff: dict) -> list:
                 errors.append(f"{answer}: 标签'{w}'解释含答案字: {note}")
             if len(note) > 30:
                 errors.append(f"{answer}: 标签'{w}'解释超30字({len(note)})")
-        if answer not in diff:
-            errors.append(f"{answer}: 缺少难度评分")
-        else:
-            score, _ = diff[answer]
-            if not (isinstance(score, int) and 1 <= score <= 5):
-                errors.append(f"{answer}: 难度分非法 {score}")
+        score = e.get("difficulty")
+        if "difficultyBasis" not in e:
+            errors.append(f"{answer}: 缺少难度依据")
+        if not (isinstance(score, int) and 1 <= score <= 5):
+            errors.append(f"{answer}: 难度分非法 {score}")
     return errors
 
 
-def build_bank(entries: list, diff: dict) -> list:
+def build_bank(entries: list) -> list:
     bank = []
     for e in entries:
         answer, ptype = e["answer"], e["_type"]
-        score, basis = diff[answer]
         item = {
             "type": ptype,
             "answer": answer,
@@ -100,8 +94,8 @@ def build_bank(entries: list, diff: dict) -> list:
             "gloss": e["gloss"],
             "story": e["story"],
             "glossSource": "人工编写·参照《成语典》体例" if ptype == "idiom" else "人工编写",
-            "difficulty": score,
-            "difficultyBasis": basis,
+            "difficulty": e["difficulty"],
+            "difficultyBasis": e["difficultyBasis"],
         }
         if ptype == "figure":
             aliases = e.get("aliases", [])
@@ -133,11 +127,9 @@ def validate_bank(bank: list) -> list:
 
 
 def build(seed_dir: Path):
-    diff = json.loads((seed_dir / "difficulty.json").read_text(encoding="utf-8"))
-    diff.pop("_rubric", None)
     entries = load("idiom", seed_dir) + load("figure", seed_dir)
-    errors = validate_entries(entries, diff)
-    bank = [] if errors else build_bank(entries, diff)
+    errors = validate_entries(entries)
+    bank = [] if errors else build_bank(entries)
     if not errors:
         errors = validate_bank(bank)
     return bank, errors, len(entries)
