@@ -12,6 +12,9 @@ on:
       - 'seed/**'
       - 'tools/**'
 
+permissions:
+  contents: write
+
 jobs:
   bank:
     runs-on: ubuntu-latest
@@ -23,11 +26,30 @@ jobs:
       - run: pip install -r tools/requirements.txt
       - name: 题库校验（红灯即违规）
         run: python tools/check.py
-      - name: 构建可复现（产物与提交一致）
+
+      # PR：贡献者须本地重建并一并提交产物（保持可复现）
+      - name: 产物可复现校验（PR）
+        if: github.event_name == 'pull_request'
         run: |
           python tools/build_bank.py --out /tmp/puzzles.json
           diff <(python -c "import json;print(json.dumps(json.load(open('/tmp/puzzles.json')),ensure_ascii=False,sort_keys=True))") \
                <(python -c "import json;print(json.dumps(json.load(open('public/data/puzzles.json')),ensure_ascii=False,sort_keys=True))")
+
+      # 主干：只提交 seed 也可以，CI 重建产物并自动提交（本地无需装 Python）
+      - name: 重建题库产物（主干）
+        if: github.event_name == 'push'
+        run: |
+          python tools/build_bank.py
+          if [[ -n "$(git status --porcelain public/data/puzzles.json)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add public/data/puzzles.json
+            git commit -m "重建题库产物 [skip ci]"
+            git push
+          else
+            echo "产物与提交一致，无需重建"
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20

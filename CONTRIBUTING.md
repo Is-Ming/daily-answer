@@ -55,13 +55,21 @@
 ## 流程
 
 ```bash
-# 1. 改 seed/
-# 2. 校验
-python tools/check.py
-# 3. 重建成品
-python tools/build_bank.py
-# 4. 本地试玩
+# 1. 改 seed/（只需改这一个目录）
+# 2. 提交并推送
+git add seed && git commit -m "题库调整：<答案>" && git push
+# 3. GitHub Actions 自动校验并重建 puzzles.json（约半分钟），完成后本地：
+git pull
+# 4. 要立即上线就推送数据文件（见下），或本地试玩：
 npm run dev   # 打开后用 ?word=答案 快速验题
 ```
 
-改过 `seed/` 或题库产物的 PR，CI 会自动跑校验器，红灯即违规。
+**主干模式**：只提交 `seed/` 即可，CI 自动重建 `puzzles.json` 并以机器人身份提交（本地无需安装 Python）。
+**PR 模式**（外部贡献者）：须本地重建并一并提交产物，CI 校验可复现性，红灯即违规。
+
+**上线数据文件**（改词立即可玩，不涉及前端发版）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/push-data.ps1
+# 校验 seed → 重建 puzzles.json → 推送到线上（旧文件自动备份，nginx 缓存 1h）
+```
