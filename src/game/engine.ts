@@ -67,13 +67,18 @@ export function submitGuess(
     const next = { ...state, status: 'win' as const }
     return {
       state: next,
-      event: { type: 'win', attempts: state.guesses.length + 1, hintsUsed: state.revealed, usedTip: state.usedTip },
+      event: {
+        type: 'win',
+        attempts: state.guesses.length + 1,
+        hintsUsed: Math.min(state.revealed + (state.usedTip ? 1 : 0), type.hintCount),
+        usedTip: state.usedTip,
+      },
     }
   }
 
   const guesses = [...state.guesses, guess]
   const wrongCount = guesses.length
-  // 已亮数只增不减：先用过锦囊（revealed = hintCount）后猜错，不得缩回
+  // 已亮数只增不减：旧存档 revealed 可能高于自然值（锦囊旧实现抬高过），不得缩回
   const revealed = Math.max(state.revealed, revealedAfter(wrongCount, attempts))
   const next: GameState = { ...state, guesses, revealed }
 
@@ -87,17 +92,16 @@ export function submitGuess(
 }
 
 /**
- * 锦囊：全局一次，多亮出一条提示（不一次全放），不扣机会，计入提示数。
+ * 锦囊：全局一次，亮出题目最后一条提示（tags[hintCount-1]），不扣机会，
+ * 不触碰自然揭示计数 revealed（前缀上界 attempts = hintCount-1，与锦囊条不重叠）。
+ * 计入提示数（hintsUsed = revealed + usedTip），使「无提示获胜」作废。
  * 已用或对局已结束时不产生任何变化。
  */
-export function useTip(
-  state: GameState,
-  type: PuzzleType,
-): { state: GameState; event: TipEvent } {
+export function useTip(state: GameState): { state: GameState; event: TipEvent } {
   if (state.status !== 'playing' || state.usedTip)
     return { state, event: { type: 'tipUnavailable' } }
   return {
-    state: { ...state, revealed: Math.min(state.revealed + 1, type.hintCount), usedTip: true },
+    state: { ...state, usedTip: true },
     event: { type: 'tip' },
   }
 }

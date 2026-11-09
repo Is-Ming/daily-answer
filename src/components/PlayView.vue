@@ -53,7 +53,7 @@ function onSubmit() {
 function onTip() {
   game.tip()
   if (state.lastEvent.type === 'tip')
-    showInvalid('锦囊已多亮出一条提示')
+    showInvalid('锦囊已亮出最后一条提示')
 }
 
 /** 错误行逐字着色已移交 TileRow（与首页示例共用同一渲染） */

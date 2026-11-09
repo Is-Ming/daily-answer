@@ -9,7 +9,7 @@ import { puzzleIndexOfDay } from '@/game/order'
 import { attemptsOf } from '@/game/rules'
 import { shareText, type ShareInfo } from '@/game/share'
 import { loadPuzzles, typeOf } from '@/data/loader'
-import type { Puzzle, PuzzleType } from '@/game/types'
+import type { HintTag, Puzzle, PuzzleType } from '@/game/types'
 import { getClientId, loadDay, loadStats, saveDay, saveStats, type DayRecord, type Stats } from './persistence'
 import { applyResult, localSnapshot } from './stats'
 import { emitGameEnd, shouldReport } from '@/report'
@@ -69,6 +69,11 @@ function persist(): void {
     saveDay(state.record)
 }
 
+/** 统一提示数口径：自然前缀 + 锦囊条；旧存档 revealed 已达 hintCount 时不再重复 +1 */
+function hintsUsedOf(rec: DayRecord): number {
+  return rec.usedTip ? Math.min(rec.revealed + 1, state.type?.hintCount ?? Infinity) : rec.revealed
+}
+
 function settle(next: GameState, event: StepEvent): void {
   const rec = state.record!
   rec.status = next.status
@@ -96,7 +101,7 @@ function settle(next: GameState, event: StepEvent): void {
         puzzle: { type: state.puzzle!.type, difficulty: state.puzzle!.difficulty },
         result: event.type === 'win' ? 'win' : 'lose',
         attempts: event.type === 'win' ? event.attempts : rec.guesses.length,
-        hintsUsed: rec.revealed,
+        hintsUsed: hintsUsedOf(rec),
         usedTip: rec.usedTip,
         durationSec: Math.round((Date.now() - rec.startedAt) / 1000),
         local: localSnapshot(state.stats, rec.date),
@@ -172,7 +177,7 @@ export function useGame() {
   function tip(): void {
     if (!state.record || !state.puzzle || !state.type || state.record.status !== 'playing')
       return
-    const { state: next, event } = useTip(toGameState(state.record), state.type)
+    const { state: next, event } = useTip(toGameState(state.record))
     state.record = { ...state.record, ...next, reported: state.record.reported }
     state.lastEvent = event
     persist()
@@ -184,9 +189,16 @@ export function useGame() {
 
   // ---- 派生数据 ----
 
-  const revealedHints = computed(() =>
-    state.puzzle ? state.puzzle.tags.slice(0, state.record?.revealed ?? 0) : [],
-  )
+  /** 可见提示 = 自然揭示前缀 ∪（锦囊亮出的最后一条，追加在末尾、同样式） */
+  const revealedHints = computed<HintTag[]>(() => {
+    if (!state.puzzle)
+      return []
+    const prefix = state.puzzle.tags.slice(0, state.record?.revealed ?? 0)
+    const tipWord = state.record?.usedTip && state.type && prefix.length < state.type.hintCount
+      ? [state.puzzle.tags[state.type.hintCount - 1]]
+      : []
+    return [...prefix, ...tipWord]
+  })
   const attemptsMax = computed(() =>
     state.puzzle && state.type ? attemptsOf(state.puzzle, state.type) : 6,
   )
@@ -201,7 +213,7 @@ export function useGame() {
       won: state.record.status === 'win',
       attempts: state.record.guesses.length + (state.record.status === 'win' ? 1 : 0),
       attemptsMax: attemptsMax.value,
-      hintsUsed: state.record.revealed,
+      hintsUsed: hintsUsedOf(state.record),
       streak: state.stats.streak,
       revealedHints: revealedHints.value,
     }

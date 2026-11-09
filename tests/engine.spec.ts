@@ -80,28 +80,36 @@ describe('提示揭示序列', () => {
 })
 
 describe('锦囊', () => {
-  it('只多亮出一条、不扣机会、只此一次', () => {
-    let r = useTip(createGame(0), IDIOM)
+  it('亮出最后一条提示（不动 revealed）、不扣机会、只此一次', () => {
+    let r = useTip(createGame(0))
     expect(r.event).toEqual({ type: 'tip' })
-    expect(r.state.revealed).toBe(2)
+    expect(r.state.revealed).toBe(1) // 计数器不被锦囊触碰，最后一条由 UI 层按 usedTip 追加
     expect(r.state.usedTip).toBe(true)
-    r = useTip(r.state, IDIOM)
+    r = useTip(r.state)
     expect(r.event).toEqual({ type: 'tipUnavailable' })
   })
 
-  it('用锦囊后再猜错，揭示序列正常推进不缩回', () => {
-    const tipped = useTip(createGame(0), IDIOM).state
-    expect(tipped.revealed).toBe(2)
-    const s = wrongN(tipped, IDIOM_PUZZLE, IDIOM, 2)
-    // 第 1 错 → min(2,6)=2，第 2 错 → min(3,6)=3
-    expect(s.revealed).toBe(3)
-    expect(s.status).toBe('playing')
+  it('用锦囊后猜错，自然揭示照常推进（锦囊不再被追平吞掉）', () => {
+    const tipped = useTip(createGame(0)).state
+    const s1 = submitGuess(tipped, WRONG_WORDS[0], IDIOM_PUZZLE, IDIOM)
+    expect(s1.state.revealed).toBe(2)
+    expect(s1.event).toEqual({ type: 'wrong', remaining: 5, newHint: true })
   })
 
-  it('用锦囊后获胜：usedTip=true，hintsUsed 计入锦囊那条', () => {
-    const tipped = useTip(createGame(0), IDIOM).state
-    const { event } = submitGuess(tipped, '破釜沉舟', IDIOM_PUZZLE, IDIOM)
-    expect(event).toEqual({ type: 'win', attempts: 1, hintsUsed: 2, usedTip: true })
+  it('用锦囊后获胜：usedTip=true，hintsUsed = revealed + 1 不重复计', () => {
+    // 已自然亮 2 条时点锦囊，再猜中 → hintsUsed = 3
+    let s = wrongN(createGame(0), IDIOM_PUZZLE, IDIOM, 1)
+    s = useTip(s).state
+    const { event } = submitGuess(s, '破釜沉舟', IDIOM_PUZZLE, IDIOM)
+    expect(event).toEqual({ type: 'win', attempts: 2, hintsUsed: 3, usedTip: true })
+  })
+
+  it('旧存档兼容：revealed 被旧实现抬高过时不回缩', () => {
+    const legacy = { ...createGame(0), revealed: 3, usedTip: true }
+    const s = wrongN(legacy, IDIOM_PUZZLE, IDIOM, 1)
+    // 自然值 = min(1+1,6) = 2 < 3，不得缩回
+    expect(s.revealed).toBe(3)
+    expect(s.status).toBe('playing')
   })
 })
 
