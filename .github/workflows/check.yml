@@ -1,16 +1,21 @@
 name: check
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'seed/**'
       - 'public/data/**'
       - 'tools/**'
+      - 'src/**'
+      - 'tests/**'
   push:
     branches: [main]
     paths:
       - 'seed/**'
       - 'tools/**'
+      - 'src/**'
+      - 'tests/**'
 
 permissions:
   contents: write
