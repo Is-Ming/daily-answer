@@ -15,13 +15,12 @@ export const BASE_SEED = 'mídǐ-2026-11-01'
 /**
  * 时期表：扩题时追加 { since: 换题日 dayIndex, size: 新题库总量 }。
  * 历史时期的 since/size 永不改动，保证历史题号永远可复算。
+ * 数据来源：public/data/epochs.json（构建器维护，只增不改），由加载器注入。
  */
 export interface Epoch {
   since: number
   size: number
 }
-
-export const EPOCHS: Epoch[] = [{ since: 0, size: 95 }]
 
 /** xmur3：字符串 → uint32 序列发生器。 */
 export function xmur3(str: string): () => number {
@@ -62,12 +61,12 @@ export function shuffledOrder(size: number, seed: string): number[] {
 /**
  * dayIndex → 题库下标。
  * bankSize 用于安全兜底（正常应等于当前 epoch.size）；
- * epochs 可注入以便测试扩题不重排历史。
+ * epochs 必传（来自产物 epochs.json），以便扩题无需改代码、测试可注入。
  */
 export function puzzleIndexOfDay(
   dayIndex: number,
   bankSize: number,
-  epochs: Epoch[] = EPOCHS,
+  epochs: Epoch[],
 ): number {
   let picked = { idx: 0, epoch: epochs[0] }
   for (let i = epochs.length - 1; i >= 0; i--) {

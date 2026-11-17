@@ -40,10 +40,10 @@ jobs:
         if: github.event_name == 'push'
         run: |
           python tools/build_bank.py
-          if [[ -n "$(git status --porcelain public/data/puzzles.json)" ]]; then
+          if [[ -n "$(git status --porcelain public/data/puzzles.json public/data/epochs.json)" ]]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add public/data/puzzles.json
+            git add public/data/puzzles.json public/data/epochs.json
             git commit -m "重建题库产物 [skip ci]"
             git push
           else

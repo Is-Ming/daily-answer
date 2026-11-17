@@ -4,11 +4,11 @@
  */
 import { computed, reactive, readonly } from 'vue'
 import { createGame, submitGuess, useTip, type GameState, type StepEvent, type TipEvent } from '@/game/engine'
-import { EPOCH_DATE, dayIndexOf, parseDate, shanghaiToday } from '@/game/schedule'
+import { dateOfIndex, dayIndexOf, shanghaiToday } from '@/game/schedule'
 import { puzzleIndexOfDay } from '@/game/order'
 import { attemptsOf } from '@/game/rules'
 import { shareText, type ShareInfo } from '@/game/share'
-import { loadPuzzles, typeOf } from '@/data/loader'
+import { LEGACY_EPOCH_DATE, LEGACY_EPOCHS, loadPuzzles, loadScheduleMeta, typeOf, type ScheduleMeta } from '@/data/loader'
 import type { HintTag, Puzzle, PuzzleType } from '@/game/types'
 import { getClientId, loadDay, loadStats, saveDay, saveStats, type DayRecord, type Stats } from './persistence'
 import { applyResult, localSnapshot } from './stats'
@@ -32,12 +32,8 @@ interface Store {
   lastEvent: StepEvent | TipEvent | { type: 'none' }
 }
 
-const DAY_MS = 86400000
-
-/** dayIndex → 对应的上海日历日（YYYY-MM-DD）。 */
-function dateForDayIndex(dayIndex: number): string {
-  return new Date(parseDate(EPOCH_DATE) + dayIndex * DAY_MS).toISOString().slice(0, 10)
-}
+/** 排期元数据（纪元日 + epoch 表）。init 时从产物加载，旧版产物由加载器兜底。 */
+let scheduleMeta: ScheduleMeta = { epochDate: LEGACY_EPOCH_DATE, epochs: LEGACY_EPOCHS }
 
 const state = reactive<Store>({
   phase: 'loading',
@@ -120,6 +116,7 @@ export function useGame() {
       const bank = await loadPuzzles()
       if (bank.length === 0)
         throw new Error('题库为空')
+      scheduleMeta = await loadScheduleMeta()
 
       const params = new URLSearchParams(window.location.search)
       const dParam = params.get('d')
@@ -128,11 +125,11 @@ export function useGame() {
 
       const today = shanghaiToday()
       state.date = today
-      state.dayIndex = dParam !== null ? Math.max(0, Number(dParam) || 0) : dayIndexOf(today)
-      if (state.date !== dateForDayIndex(state.dayIndex))
-        state.date = dateForDayIndex(state.dayIndex) // 调试历史日时以该日为存储键
+      state.dayIndex = dParam !== null ? Math.max(0, Number(dParam) || 0) : dayIndexOf(today, scheduleMeta.epochDate)
+      if (state.date !== dateOfIndex(state.dayIndex, scheduleMeta.epochDate))
+        state.date = dateOfIndex(state.dayIndex, scheduleMeta.epochDate) // 调试历史日时以该日为存储键
 
-      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.length)]
+      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.length, scheduleMeta.epochs)]
       if (wordParam)
         state.puzzle = { ...state.puzzle, answer: wordParam } // 调试：指定答案
       state.type = typeOf(state.puzzle)

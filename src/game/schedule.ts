@@ -3,10 +3,10 @@
  *
  * 一律按 Asia/Shanghai 日历日计算，倒计时指向上海时间次日零点，
  * 避免海外用户提前换题导致分享的答案对不上。
+ *
+ * 纪元日不在此处写死：由调用方从产物 epochs.json 的 epochDate 注入，
+ * 保证构建器（Python）与前端共用同一数据源。
  */
-
-/** 纪元日：第 0 天（首题上线日）。2026-10-30 实际上线日（当初按 11-01 规划，提前上线改为真实日期）。 */
-export const EPOCH_DATE = '2026-10-30'
 
 const DAY_MS = 86400000
 
@@ -31,9 +31,14 @@ export function dateDiffDays(a: string, b: string): number {
   return Math.round((parseDate(b) - parseDate(a)) / DAY_MS)
 }
 
-/** 上海日历日 → dayIndex（纪元日前钳制为 0）。 */
-export function dayIndexOf(dateStr: string = shanghaiToday()): number {
-  return Math.max(0, Math.round((parseDate(dateStr) - parseDate(EPOCH_DATE)) / DAY_MS))
+/** 上海日历日 → dayIndex（纪元日前钳制为 0）。epochDate 由装配层注入。 */
+export function dayIndexOf(dateStr: string, epochDate: string): number {
+  return Math.max(0, Math.round((parseDate(dateStr) - parseDate(epochDate)) / DAY_MS))
+}
+
+/** dayIndex → 对应的上海日历日（YYYY-MM-DD）。epochDate 由装配层注入。 */
+export function dateOfIndex(dayIndex: number, epochDate: string): string {
+  return new Date(parseDate(epochDate) + dayIndex * DAY_MS).toISOString().slice(0, 10)
 }
 
 /** 距上海时间次日零点的毫秒数（结算页倒计时用）。上海无夏令时，固定 UTC+8。 */
