@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import bankJson from '../public/data/puzzles.json'
-import { typeOf } from '@/data/loader'
+import epochsJson from '../public/data/epochs.json'
+import { typeOf, validateEpochs } from '@/data/loader'
 import type { Puzzle } from '@/game/types'
 
 const bank = bankJson as Puzzle[]
+const meta = epochsJson as { epochDate: string; epochs: { since: number; size: number }[] }
 
 describe('脚手架与题库冒烟', () => {
-  it('题库为 95 题（成语 70 + 人物 25）', () => {
-    expect(bank).toHaveLength(95)
-    expect(bank.filter((p) => p.type === 'idiom')).toHaveLength(70)
-    expect(bank.filter((p) => p.type === 'figure')).toHaveLength(25)
+  it('题库非空且与排期元数据一致', () => {
+    expect(bank.length).toBeGreaterThan(0)
+    validateEpochs(meta.epochs)
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(meta.epochDate)).toBe(true)
+    expect(meta.epochs[meta.epochs.length - 1].size).toBe(bank.length)
   })
 
-  it('题型注册表覆盖题库中出现的所有题型', () => {
+  it('题库仅含已注册题型且题型计数相符', () => {
+    const idiom = bank.filter((p) => p.type === 'idiom').length
+    const figure = bank.filter((p) => p.type === 'figure').length
+    expect(idiom + figure).toBe(bank.length)
+    expect(idiom).toBeGreaterThan(0)
+    expect(figure).toBeGreaterThan(0)
     for (const p of bank) {
       const t = typeOf(p)
       expect(t.attempts).toBeGreaterThan(0)
