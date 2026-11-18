@@ -136,8 +136,7 @@ def validate_entries(entries: list) -> list:
                 for x in pinyin(ch, style=Style.TONE3, strict=False, heteronym=True):
                     if no_tone(x[0]) in banned:
                         errors.append(f"{answer}: 标签'{w}'与答案同音({no_tone(x[0])})")
-            if any(ch in answer for ch in note):
-                errors.append(f"{answer}: 标签'{w}'解释含答案字: {note}")
+            # note 为结算页内容（对局中不显示），不校验是否含答案字；仅约束长度
             if len(note) > 30:
                 errors.append(f"{answer}: 标签'{w}'解释超30字({len(note)})")
         score = e.get("difficulty")
