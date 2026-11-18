@@ -8,10 +8,12 @@ export const puzzleTypes = typesJson as PuzzleType[]
 export const LEGACY_EPOCH_DATE = '2026-10-30'
 export const LEGACY_EPOCHS: Epoch[] = [{ since: 0, size: 95 }]
 
-/** 排期元数据：纪元日 + epoch 沿革表（来自 epochs.json） */
+/** 排期元数据：纪元日 + epoch 沿革表 + 当日/历史钉住（来自 epochs.json） */
 export interface ScheduleMeta {
   epochDate: string
   epochs: Epoch[]
+  /** dayIndex → 题库下标；命中的日子直接出该题（当日钉住/历史钉住） */
+  overrides: Record<string, number>
 }
 
 export function typeOf(puzzle: Puzzle): PuzzleType {
@@ -45,15 +47,30 @@ export function validateEpochs(epochs: unknown): asserts epochs is Epoch[] {
   }
 }
 
+/** overrides 结构校验（纯函数）。非法抛错。 */
+export function validateOverrides(overrides: unknown): asserts overrides is Record<string, number> {
+  if (typeof overrides !== 'object' || overrides === null || Array.isArray(overrides))
+    throw new Error('overrides 非法：必须为对象')
+  for (const [k, v] of Object.entries(overrides)) {
+    if (!/^\d+$/.test(k))
+      throw new Error('overrides 非法：键必须为非负整数（dayIndex）')
+    if (!Number.isInteger(v) || v < 0)
+      throw new Error('overrides 非法：值必须为非负整数（题库下标）')
+  }
+}
+
 /** 解析排期元数据（纯函数）。非法抛错。 */
 export function parseScheduleMeta(data: unknown): ScheduleMeta {
   if (typeof data !== 'object' || data === null)
     throw new Error('排期元数据非法')
-  const { epochDate, epochs } = data as Record<string, unknown>
+  const { epochDate, epochs, overrides } = data as Record<string, unknown>
   if (typeof epochDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(epochDate))
     throw new Error('排期元数据非法：epochDate 必须为 YYYY-MM-DD')
   validateEpochs(epochs)
-  return { epochDate, epochs }
+  if (overrides === undefined)
+    return { epochDate, epochs, overrides: {} }
+  validateOverrides(overrides)
+  return { epochDate, epochs, overrides }
 }
 
 /**
@@ -63,7 +80,7 @@ export function parseScheduleMeta(data: unknown): ScheduleMeta {
 export async function loadScheduleMeta(): Promise<ScheduleMeta> {
   const res = await fetch(`${import.meta.env.BASE_URL}data/epochs.json`)
   if (res.status === 404)
-    return { epochDate: LEGACY_EPOCH_DATE, epochs: LEGACY_EPOCHS }
+    return { epochDate: LEGACY_EPOCH_DATE, epochs: LEGACY_EPOCHS, overrides: {} }
   if (!res.ok)
     throw new Error(`排期元数据加载失败: HTTP ${res.status}`)
   return parseScheduleMeta(await res.json())

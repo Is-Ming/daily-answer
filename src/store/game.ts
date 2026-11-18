@@ -33,7 +33,7 @@ interface Store {
 }
 
 /** 排期元数据（纪元日 + epoch 表）。init 时从产物加载，旧版产物由加载器兜底。 */
-let scheduleMeta: ScheduleMeta = { epochDate: LEGACY_EPOCH_DATE, epochs: LEGACY_EPOCHS }
+let scheduleMeta: ScheduleMeta = { epochDate: LEGACY_EPOCH_DATE, epochs: LEGACY_EPOCHS, overrides: {} }
 
 const state = reactive<Store>({
   phase: 'loading',
@@ -129,7 +129,7 @@ export function useGame() {
       if (state.date !== dateOfIndex(state.dayIndex, scheduleMeta.epochDate))
         state.date = dateOfIndex(state.dayIndex, scheduleMeta.epochDate) // 调试历史日时以该日为存储键
 
-      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.length, scheduleMeta.epochs)]
+      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.length, scheduleMeta.epochs, scheduleMeta.overrides)]
       if (wordParam)
         state.puzzle = { ...state.puzzle, answer: wordParam } // 调试：指定答案
       state.type = typeOf(state.puzzle)

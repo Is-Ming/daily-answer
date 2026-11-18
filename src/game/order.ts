@@ -61,13 +61,21 @@ export function shuffledOrder(size: number, seed: string): number[] {
 /**
  * dayIndex → 题库下标。
  * bankSize 用于安全兜底（正常应等于当前 epoch.size）；
- * epochs 必传（来自产物 epochs.json），以便扩题无需改代码、测试可注入。
+ * epochs 必传（来自产物 epochs.json），以便扩题无需改代码、测试可注入；
+ * overrides 命中的日子直接返回钉住下标（当日钉住/历史钉住），未命中走洗牌。
  */
 export function puzzleIndexOfDay(
   dayIndex: number,
   bankSize: number,
   epochs: Epoch[],
+  overrides: Record<string, number> = {},
 ): number {
+  const pinned = overrides[String(dayIndex)]
+  if (pinned != null) {
+    if (!Number.isInteger(pinned) || pinned < 0 || pinned >= bankSize)
+      throw new Error(`override 非法: day${dayIndex} → ${pinned}（题库共 ${bankSize} 题）`)
+    return pinned
+  }
   let picked = { idx: 0, epoch: epochs[0] }
   for (let i = epochs.length - 1; i >= 0; i--) {
     if (dayIndex >= epochs[i].since) {

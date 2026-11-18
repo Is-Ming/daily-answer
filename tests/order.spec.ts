@@ -76,6 +76,32 @@ describe('每日出题', () => {
   })
 })
 
+describe('当日钉住（override）', () => {
+  const DAY19: Epoch[] = [{ since: 0, size: 95 }, { since: 19, size: 96 }]
+
+  it('命中日直接返回钉住下标（当日不受扩题影响）', () => {
+    // 扩题日钉住旧口径当日题：无论新洗牌把哪题排到 day19，钉住优先
+    const idx = puzzleIndexOfDay(19, 96, DAY19, { '19': 60 })
+    expect(idx).toBe(60)
+  })
+
+  it('未命中日不受 override 影响', () => {
+    expect(puzzleIndexOfDay(20, 96, DAY19, { '19': 60 }))
+      .toBe(puzzleIndexOfDay(20, 96, DAY19))
+    expect(puzzleIndexOfDay(18, 95, DAY19, { '19': 60 }))
+      .toBe(puzzleIndexOfDay(18, 95, DAY19))
+  })
+
+  it('override 越界抛错（防御畸形产物）', () => {
+    expect(() => puzzleIndexOfDay(19, 96, DAY19, { '19': 999 })).toThrow()
+    expect(() => puzzleIndexOfDay(19, 96, DAY19, { '19': -1 })).toThrow()
+  })
+
+  it('空 override 表等价于纯洗牌（兜底）', () => {
+    expect(puzzleIndexOfDay(19, 96, DAY19, {})).toBe(puzzleIndexOfDay(19, 96, DAY19))
+  })
+})
+
 describe('排期元数据解析（loader 纯函数）', () => {
   it('合法元数据解析通过', () => {
     const meta = parseScheduleMeta({ epochDate: '2026-10-30', epochs: [{ since: 0, size: 95 }] })

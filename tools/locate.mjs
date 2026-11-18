@@ -57,7 +57,20 @@ const shanghaiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/S
 const today = Math.max(0, Math.round((Date.parse(shanghaiToday() + 'T00:00Z') - Date.UTC(2026, 9, 30)) / 86400000))
 const MAX_CYCLE = 3
 
+const info = (i) => `题型=${bank[i].type} 难度=${bank[i].difficulty}`
 let found = 0
+
+// 钉住日优先（overrides：命中的日子直接出该题）
+const overrides = meta.overrides ?? {}
+for (const [d, i] of Object.entries(overrides)) {
+  const day = Number(d)
+  if (day < today || bank[i]?.answer !== answer) continue
+  console.log(`${answer} → d=${day}（${dateOf(day)}）[钉住] | ${info(i)}`)
+  found++
+}
+
+// 洗牌序列（钉住日被顶替，不按洗牌出题，扫描时跳过）
+const overrideDays = new Set(Object.keys(overrides).map(Number))
 for (let e = meta.epochs.length - 1; e >= 0; e--) {
   const epoch = meta.epochs[e]
   for (let cycle = 0; cycle < MAX_CYCLE; cycle++) {
@@ -65,8 +78,8 @@ for (let e = meta.epochs.length - 1; e >= 0; e--) {
     for (let slot = 0; slot < epoch.size; slot++) {
       if (order[slot] % bank.length !== idx) continue
       const day = epoch.since + cycle * epoch.size + slot
-      if (day < today) continue
-      console.log(`${answer} → d=${day}（${dateOf(day)}）epoch${e} cycle${cycle} 槽位${slot} | 题型=${bank[idx].type} 难度=${bank[idx].difficulty}`)
+      if (day < today || overrideDays.has(day)) continue
+      console.log(`${answer} → d=${day}（${dateOf(day)}）epoch${e} cycle${cycle} 槽位${slot} | ${info(idx)}`)
       found++
       if (found >= 3) process.exit(0)
     }
