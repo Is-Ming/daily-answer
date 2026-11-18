@@ -12,8 +12,8 @@ export const LEGACY_EPOCHS: Epoch[] = [{ since: 0, size: 95 }]
 export interface ScheduleMeta {
   epochDate: string
   epochs: Epoch[]
-  /** dayIndex → 题库下标；命中的日子直接出该题（当日钉住/历史钉住） */
-  overrides: Record<string, number>
+  /** dayIndex → 答案；命中的日子直接出该题（当日钉住/历史钉住），与题库排序解耦 */
+  overrides: Record<string, string>
 }
 
 export function typeOf(puzzle: Puzzle): PuzzleType {
@@ -40,6 +40,12 @@ export function validateEpochs(epochs: unknown): asserts epochs is Epoch[] {
       throw new Error('epochs 非法：since 必须为非负整数')
     if (!Number.isInteger(e.size) || e.size < 1)
       throw new Error('epochs 非法：size 必须为正整数')
+    if (e.seq !== undefined) {
+      if (!Array.isArray(e.seq) || !e.seq.every((a: unknown) => typeof a === 'string'))
+        throw new Error('epochs 非法：seq 必须为字符串数组')
+      if (e.seq.length !== e.size)
+        throw new Error(`epochs 非法：seq 长度 ${e.seq.length} ≠ size ${e.size}`)
+    }
   }
   for (let i = 1; i < epochs.length; i++) {
     if (epochs[i].since <= epochs[i - 1].since)
@@ -48,14 +54,14 @@ export function validateEpochs(epochs: unknown): asserts epochs is Epoch[] {
 }
 
 /** overrides 结构校验（纯函数）。非法抛错。 */
-export function validateOverrides(overrides: unknown): asserts overrides is Record<string, number> {
+export function validateOverrides(overrides: unknown): asserts overrides is Record<string, string> {
   if (typeof overrides !== 'object' || overrides === null || Array.isArray(overrides))
     throw new Error('overrides 非法：必须为对象')
   for (const [k, v] of Object.entries(overrides)) {
     if (!/^\d+$/.test(k))
       throw new Error('overrides 非法：键必须为非负整数（dayIndex）')
-    if (!Number.isInteger(v) || v < 0)
-      throw new Error('overrides 非法：值必须为非负整数（题库下标）')
+    if (typeof v !== 'string' || v.length === 0)
+      throw new Error('overrides 非法：值必须为非空字符串（答案）')
   }
 }
 

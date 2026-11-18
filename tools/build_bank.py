@@ -10,8 +10,11 @@
   (type, answer) 稳定排序以便 diff。
 - 人物别名拆分：与答案等长的进入 aliases（参与判赢），其余进入
   altNames（仅结算页展示）。
-- 扩题：题数多于上一版成品时自动在 epochs 末尾追加 {since: 次日, size}，
-  同日多次扩题合并；删题（题数减少）与篡改历史 epoch 一律红灯。
+- 扩题：题数多于上一版成品时立即锚定（since=当天）并追加 epoch，同日多次
+  扩题合并；删题（题数减少）与篡改历史 epoch/seq 一律红灯。
+- 排期冻结：每个 epoch 携带 seq（与 size 等长的答案字符串数组），创建时
+  一次洗牌冻结，此后历史出题与题库排序/增删彻底解耦（frozen-seq）。
+  一次性迁移可用 --legacy-seq 注入历史真实序列。
 """
 import argparse
 import json
@@ -216,10 +219,12 @@ def load_prev_meta(prev_dir: Path) -> dict:
         epochs = [{"since": 0, "size": prev_count}] if prev_count is not None else []
 
     override_answers = {}
-    for day_s, idx in (overrides_raw or {}).items():
+    for day_s, val in (overrides_raw or {}).items():
         day = int(day_s)
-        if prev_answers is not None and isinstance(idx, int) and 0 <= idx < len(prev_answers):
-            override_answers[day] = prev_answers[idx]
+        if isinstance(val, str):
+            override_answers[day] = val  # 新格式：答案字符串，原样沿用
+        elif isinstance(val, int) and prev_answers is not None and 0 <= val < len(prev_answers):
+            override_answers[day] = prev_answers[val]  # 旧格式：下标重译
         else:
             override_answers[day] = None  # 无法解析 → 校验红灯
 
@@ -233,7 +238,7 @@ def shanghai_today() -> date:
 
 
 def _old_derive(day_idx: int, epochs: list, bank_size: int) -> int:
-    """旧口径推导（与 src/game/order.ts 的 puzzleIndexOfDay 同源）。"""
+    """旧口径推导（与 src/game/order.ts 旧洗牌路径同源）。"""
     picked_i, picked_e = 0, epochs[0]
     for i, e in enumerate(epochs):
         if day_idx >= e["since"]:
@@ -243,6 +248,21 @@ def _old_derive(day_idx: int, epochs: list, bank_size: int) -> int:
     slot = local % picked_e["size"]
     order = shuffled_order_py(picked_e["size"], f"{BASE_SEED}:{picked_i}:{cycle}")
     return order[slot] % bank_size
+
+
+def _answers_of(new_answer_index: dict) -> list:
+    """answer→index 映射还原为答案有序列表。"""
+    answers = [None] * len(new_answer_index)
+    for a, i in new_answer_index.items():
+        answers[i] = a
+    return answers
+
+
+def _freeze_seq(epoch_idx: int, epoch: dict, answers: list) -> list:
+    """洗牌一次并把下标译成答案，冻结为 seq（仅 epoch 创建/迁移时调用）。"""
+    order = shuffled_order_py(epoch["size"], f"{BASE_SEED}:{epoch_idx}:0")
+    n = len(answers)
+    return [answers[ix % n] for ix in order]
 
 
 def resolve_meta(prev: dict, new_count: int, new_answer_index: dict,
@@ -267,22 +287,56 @@ def resolve_meta(prev: dict, new_count: int, new_answer_index: dict,
 
     epochs = [dict(e) for e in old_epochs]
     prev_count = prev["prevCount"]
+    new_answers = _answers_of(new_answer_index)
 
     # now-anchor：禁止预排未来 epoch
     if any(e["since"] > today_idx for e in old_epochs):
         errors.append(f"存在 since 大于今天({today_idx}) 的 epoch：现在锚点下禁止预排未来")
 
-    # 历史 override 平移重译（答案缺失即红灯）
+    # frozen-seq：无 seq 的旧 epoch 补齐（legacy 注入优先，否则按当前题库冻结）；
+    # 已带 seq 的只做结构校验，内容是否被改动在下面冻结校验里对账。
+    legacy_seq = prev.get("legacySeq") or {}
+    for i, e in enumerate(epochs):
+        seq = e.get("seq")
+        if seq is not None:
+            if (not isinstance(seq, list) or len(seq) != e["size"]
+                    or not all(isinstance(a, str) for a in seq)):
+                errors.append(f"epoch(since={e['since']}) seq 非法：须为长度==size 的字符串数组")
+                return {"epochDate": epoch_date, "epochs": [], "overrides": {}}, errors
+            continue
+        legacy = legacy_seq.get(str(e["since"]))
+        if legacy is not None:
+            if not isinstance(legacy, list) or len(legacy) != e["size"]:
+                errors.append(f"epoch(since={e['since']}) legacy-seq 长度不符："
+                              f"{len(legacy)} ≠ size={e['size']}")
+                continue
+            e["seq"] = [str(a) for a in legacy]
+        else:
+            e["seq"] = _freeze_seq(i, e, new_answers)
+
+    # frozen-seq：已生效（since < 今天）epoch 的冻结序列逐字对账，改动即红灯
+    for oe, ne in zip(old_epochs, epochs):
+        if oe.get("seq") is not None and oe["since"] < today_idx and ne.get("seq") != oe["seq"]:
+            errors.append(f"epoch(since={oe['since']}) 已冻结 seq 被改动：历史出题不可重写")
+
+    # seq 引用的答案必须存在于新题库（删除已出答案的既有红线延伸到 seq）
+    for e in epochs:
+        for a in e.get("seq") or []:
+            if a not in new_answer_index:
+                errors.append(f"epoch(since={e['since']}) seq 答案 {a} 在新题库中缺失")
+
+    # 历史 override：直接以答案字符串落盘（与题库排序/下标彻底解耦）
     overrides: dict = {}
     for day, ans in prev["overrideAnswers"].items():
         if ans is None or ans not in new_answer_index:
             errors.append(f"override(day {day}) 答案 {ans} 在新题库中缺失（不得删除当日已出答案）")
             continue
-        overrides[day] = new_answer_index[ans]
+        overrides[day] = ans
 
     if prev_count is None:
-        # 首次构建：产出首个 epoch
+        # 首次构建：产出首个 epoch（创建即冻结）
         epochs = [{"since": 0, "size": new_count}]
+        epochs[0]["seq"] = _freeze_seq(0, epochs[0], new_answers)
     elif new_count < prev_count:
         errors.append(f"题数减少（{prev_count} → {new_count}）：禁止删题，规模是排期根基")
     elif new_count > prev_count:
@@ -290,8 +344,11 @@ def resolve_meta(prev: dict, new_count: int, new_answer_index: dict,
         last = epochs[-1]
         if since == last["since"]:
             last["size"] = new_count  # 同日多推合并
+            last["seq"] = _freeze_seq(len(epochs) - 1, last, new_answers)  # 当日由 override 钉住，seq 可按新规模重建
         elif since > last["since"]:
-            epochs.append({"since": since, "size": new_count})
+            e = {"since": since, "size": new_count}
+            e["seq"] = _freeze_seq(len(epochs), e, new_answers)  # 创建即冻结，此后不重算
+            epochs.append(e)
         else:
             errors.append(f"epoch since={since} 未严格大于上一条（{last['since']}）：系统日期异常？")
 
@@ -301,7 +358,7 @@ def resolve_meta(prev: dict, new_count: int, new_answer_index: dict,
             if pinned is None or pinned not in new_answer_index:
                 errors.append(f"当日钉住答案 {pinned} 在新题库中缺失（不得删除当日已出答案）")
             else:
-                overrides[today_idx] = new_answer_index[pinned]
+                overrides[today_idx] = pinned
         else:
             if prev["prevAnswers"] is None:
                 errors.append("旧口径当日题推导失败：上一版题库缺失")
@@ -314,11 +371,12 @@ def resolve_meta(prev: dict, new_count: int, new_answer_index: dict,
                     if pinned not in new_answer_index:
                         errors.append(f"当日已出答案 {pinned} 在新题库中缺失（不得删除当日已出答案）")
                     else:
-                        overrides[today_idx] = new_answer_index[pinned]
+                        overrides[today_idx] = pinned
 
-    # 冻结校验：since < 今天的 epoch 不可变
-    frozen = [e for e in old_epochs if e["since"] < today_idx]
-    if epochs[:len(frozen)] != frozen:
+    # 冻结校验：since < 今天的 epoch 的 since/size 不可变（seq 冻结由上方专设校验负责）
+    frozen = [{"since": e["since"], "size": e["size"]} for e in old_epochs if e["since"] < today_idx]
+    now = [{"since": e["since"], "size": e["size"]} for e in epochs[:len(frozen)]]
+    if now != frozen:
         errors.append("epochs 已生效条目被改动（只增不改，历史题号必须可复算）")
     sizes = [e["size"] for e in epochs]
     if any(b <= a for a, b in zip(sizes, sizes[1:])):
@@ -345,13 +403,18 @@ def main() -> int:
     ap.add_argument("--seed", default=str(ROOT / "seed"), help="题源目录")
     ap.add_argument("--out", default=str(ROOT / "public" / "data" / "puzzles.json"), help="输出文件")
     ap.add_argument("--prev", default=str(ROOT / "public" / "data"), help="上一版成品目录（读题数与 epochs）")
+    ap.add_argument("--legacy-seq", default=None,
+                    help='一次性迁移：{"<since>": [答案...]} JSON 文件，为无 seq 的旧 epoch 注入历史真实序列')
     args = ap.parse_args()
 
     bank, errors, total = build(Path(args.seed))
     meta = None
     if not errors:
         answer_index = {p["answer"]: i for i, p in enumerate(bank)}
-        meta, meta_errors = resolve_meta(load_prev_meta(Path(args.prev)), len(bank), answer_index)
+        prev = load_prev_meta(Path(args.prev))
+        if args.legacy_seq:
+            prev["legacySeq"] = json.loads(Path(args.legacy_seq).read_text(encoding="utf-8"))
+        meta, meta_errors = resolve_meta(prev, len(bank), answer_index)
         errors = list(errors) + meta_errors
     print(f"载入 {total} 条（成语 {sum(1 for e in load('idiom', Path(args.seed)))} + "
           f"人物 {sum(1 for e in load('figure', Path(args.seed)))}），问题 {len(errors)} 个")
@@ -370,7 +433,8 @@ def main() -> int:
     dist = Counter(x["type"] for x in bank)
     print(f"输出 {out}（{len(bank)} 题：{dict(dist)}）")
     print("难度分布:", dict(sorted(Counter(x["difficulty"] for x in bank).items())))
-    print(f"输出 {epochs_path}（epochDate={meta['epochDate']}，epochs={meta['epochs']}）")
+    brief = [{"since": e["since"], "size": e["size"], "seq": f"{len(e.get('seq') or [])} 条"} for e in meta["epochs"]]
+    print(f"输出 {epochs_path}（epochDate={meta['epochDate']}，epochs={brief}，overrides={meta['overrides']}）")
     return 0
 
 

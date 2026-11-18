@@ -60,26 +60,31 @@ const MAX_CYCLE = 3
 const info = (i) => `题型=${bank[i].type} 难度=${bank[i].difficulty}`
 let found = 0
 
-// 钉住日优先（overrides：命中的日子直接出该题）
+// 钉住日优先（overrides：day → 答案，命中的日子直接出该题）
 const overrides = meta.overrides ?? {}
-for (const [d, i] of Object.entries(overrides)) {
+for (const [d, a] of Object.entries(overrides)) {
   const day = Number(d)
-  if (day < today || bank[i]?.answer !== answer) continue
+  if (day < today || a !== answer) continue
+  const i = bank.findIndex((p) => p.answer === answer)
   console.log(`${answer} → d=${day}（${dateOf(day)}）[钉住] | ${info(i)}`)
   found++
 }
 
-// 洗牌序列（钉住日被顶替，不按洗牌出题，扫描时跳过）
+// 冻结序列/洗牌序列（钉住日被顶替，扫描时跳过）
 const overrideDays = new Set(Object.keys(overrides).map(Number))
 for (let e = meta.epochs.length - 1; e >= 0; e--) {
   const epoch = meta.epochs[e]
   for (let cycle = 0; cycle < MAX_CYCLE; cycle++) {
-    const order = shuffledOrder(epoch.size, `${BASE_SEED}:${e}:${cycle}`)
+    // frozen-seq：冻结序列查表；无 seq 的旧 epoch 回落洗牌推导
+    const order = epoch.seq ?? shuffledOrder(epoch.size, `${BASE_SEED}:${e}:${cycle}`)
     for (let slot = 0; slot < epoch.size; slot++) {
-      if (order[slot] % bank.length !== idx) continue
+      const at = epoch.seq
+        ? bank.findIndex((p) => p.answer === order[slot])
+        : order[slot] % bank.length
+      if (at !== idx) continue
       const day = epoch.since + cycle * epoch.size + slot
       if (day < today || overrideDays.has(day)) continue
-      console.log(`${answer} → d=${day}（${dateOf(day)}）epoch${e} cycle${cycle} 槽位${slot} | ${info(idx)}`)
+      console.log(`${answer} → d=${day}（${dateOf(day)}）epoch${e} cycle${cycle} 槽位${slot}${epoch.seq ? ' [冻结]' : ''} | ${info(idx)}`)
       found++
       if (found >= 3) process.exit(0)
     }

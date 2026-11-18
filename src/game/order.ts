@@ -13,13 +13,15 @@
 export const BASE_SEED = 'mídǐ-2026-11-01'
 
 /**
- * 时期表：扩题时追加 { since: 换题日 dayIndex, size: 新题库总量 }。
- * 历史时期的 since/size 永不改动，保证历史题号永远可复算。
+ * 时期表：扩题时追加 { since: 换题日 dayIndex, size: 新题库总量, seq: 冻结序列 }。
+ * 历史时期的 since/size/seq 永不改动，保证历史题号永远可复算。
+ * seq 为构建期一次洗牌冻结的答案序列（长度==size）；缺省时回落洗牌推导（旧产物兜底）。
  * 数据来源：public/data/epochs.json（构建器维护，只增不改），由加载器注入。
  */
 export interface Epoch {
   since: number
   size: number
+  seq?: string[]
 }
 
 /** xmur3：字符串 → uint32 序列发生器。 */
@@ -60,21 +62,24 @@ export function shuffledOrder(size: number, seed: string): number[] {
 
 /**
  * dayIndex → 题库下标。
- * bankSize 用于安全兜底（正常应等于当前 epoch.size）；
- * epochs 必传（来自产物 epochs.json），以便扩题无需改代码、测试可注入；
- * overrides 命中的日子直接返回钉住下标（当日钉住/历史钉住），未命中走洗牌。
+ * answers 为当前题库答案有序数组（seq 查表与安全兜底都要用）；
+ * epochs 必传（来自产物 epochs.json）；overrides 命中的日子直接返回钉住下标。
+ * epoch 带 seq 时查冻结序列（frozen-seq：历史出题与题库排序/增删解耦），
+ * seq[slot] 不在题库中抛错（fail-closed）；无 seq 回落洗牌推导（旧产物兜底）。
  */
 export function puzzleIndexOfDay(
   dayIndex: number,
-  bankSize: number,
+  answers: readonly string[],
   epochs: Epoch[],
-  overrides: Record<string, number> = {},
+  overrides: Record<string, string> = {},
 ): number {
-  const pinned = overrides[String(dayIndex)]
-  if (pinned != null) {
-    if (!Number.isInteger(pinned) || pinned < 0 || pinned >= bankSize)
-      throw new Error(`override 非法: day${dayIndex} → ${pinned}（题库共 ${bankSize} 题）`)
-    return pinned
+  const bankSize = answers.length
+  const pinnedAnswer = overrides[String(dayIndex)]
+  if (pinnedAnswer != null) {
+    const at = answers.indexOf(pinnedAnswer)
+    if (at < 0)
+      throw new Error(`override 非法: day${dayIndex} → 「${pinnedAnswer}」（题库中不存在）`)
+    return at
   }
   let picked = { idx: 0, epoch: epochs[0] }
   for (let i = epochs.length - 1; i >= 0; i--) {
@@ -85,8 +90,15 @@ export function puzzleIndexOfDay(
   }
   const { idx, epoch } = picked
   const local = dayIndex - epoch.since
-  const cycle = Math.floor(local / epoch.size)
   const slot = local % epoch.size
+  if (epoch.seq) {
+    const answer = epoch.seq[slot]
+    const at = answers.indexOf(answer)
+    if (at < 0)
+      throw new Error(`epoch${idx} seq[${slot}] 答案「${answer}」不在题库中（产物不一致）`)
+    return at
+  }
+  const cycle = Math.floor(local / epoch.size)
   const order = shuffledOrder(epoch.size, `${BASE_SEED}:${idx}:${cycle}`)
   return order[slot] % bankSize
 }

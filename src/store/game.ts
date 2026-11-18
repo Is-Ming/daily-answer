@@ -129,7 +129,7 @@ export function useGame() {
       if (state.date !== dateOfIndex(state.dayIndex, scheduleMeta.epochDate))
         state.date = dateOfIndex(state.dayIndex, scheduleMeta.epochDate) // 调试历史日时以该日为存储键
 
-      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.length, scheduleMeta.epochs, scheduleMeta.overrides)]
+      state.puzzle = bank[puzzleIndexOfDay(state.dayIndex, bank.map((p) => p.answer), scheduleMeta.epochs, scheduleMeta.overrides)]
       if (wordParam)
         state.puzzle = { ...state.puzzle, answer: wordParam } // 调试：指定答案
       state.type = typeOf(state.puzzle)
