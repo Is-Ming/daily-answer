@@ -7,8 +7,10 @@
   },
   {
    "since": 19,
-   "size": 96
+   "size": 100
   }
  ],
- "overrides": {}
+ "overrides": {
+  "19": 93
+ }
 }
