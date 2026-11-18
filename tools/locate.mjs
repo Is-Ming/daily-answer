@@ -70,10 +70,11 @@ for (const [d, a] of Object.entries(overrides)) {
   found++
 }
 
-// 冻结序列/洗牌序列（钉住日被顶替，扫描时跳过）
+// 冻结序列/洗牌序列（钉住日被顶替，扫描时跳过；已被后继 epoch 接管的日子不属于本 epoch）
 const overrideDays = new Set(Object.keys(overrides).map(Number))
 for (let e = meta.epochs.length - 1; e >= 0; e--) {
   const epoch = meta.epochs[e]
+  const nextSince = meta.epochs[e + 1]?.since ?? Infinity
   for (let cycle = 0; cycle < MAX_CYCLE; cycle++) {
     // frozen-seq：冻结序列查表；无 seq 的旧 epoch 回落洗牌推导
     const order = epoch.seq ?? shuffledOrder(epoch.size, `${BASE_SEED}:${e}:${cycle}`)
@@ -83,7 +84,7 @@ for (let e = meta.epochs.length - 1; e >= 0; e--) {
         : order[slot] % bank.length
       if (at !== idx) continue
       const day = epoch.since + cycle * epoch.size + slot
-      if (day < today || overrideDays.has(day)) continue
+      if (day >= nextSince || day < today || overrideDays.has(day)) continue
       console.log(`${answer} → d=${day}（${dateOf(day)}）epoch${e} cycle${cycle} 槽位${slot}${epoch.seq ? ' [冻结]' : ''} | ${info(idx)}`)
       found++
       if (found >= 3) process.exit(0)
