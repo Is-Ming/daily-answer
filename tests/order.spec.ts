@@ -141,6 +141,11 @@ describe('当日钉住（override）', () => {
     expect(() => puzzleIndexOfDay(19, answers96, DAY19, { '19': '' })).toThrow()
   })
 
+  it('旧格式数字下标 override 兼容（未重建的旧产物不崩）', () => {
+    expect(puzzleIndexOfDay(19, answers96, DAY19, { '19': 60 })).toBe(60)
+    expect(() => puzzleIndexOfDay(19, answers96, DAY19, { '19': 999 })).toThrow()
+  })
+
   it('空 override 表等价于纯推导（兜底）', () => {
     expect(puzzleIndexOfDay(19, answers96, DAY19, {})).toBe(puzzleIndexOfDay(19, answers96, DAY19))
   })

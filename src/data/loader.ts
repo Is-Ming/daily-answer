@@ -12,8 +12,8 @@ export const LEGACY_EPOCHS: Epoch[] = [{ since: 0, size: 95 }]
 export interface ScheduleMeta {
   epochDate: string
   epochs: Epoch[]
-  /** dayIndex → 答案；命中的日子直接出该题（当日钉住/历史钉住），与题库排序解耦 */
-  overrides: Record<string, string>
+  /** dayIndex → 答案（字符串）或旧格式题库下标（数字）；命中日直接出该题 */
+  overrides: Record<string, number | string>
 }
 
 export function typeOf(puzzle: Puzzle): PuzzleType {
@@ -53,15 +53,15 @@ export function validateEpochs(epochs: unknown): asserts epochs is Epoch[] {
   }
 }
 
-/** overrides 结构校验（纯函数）。非法抛错。 */
-export function validateOverrides(overrides: unknown): asserts overrides is Record<string, string> {
+/** overrides 结构校验（纯函数）。非法抛错。值为答案字符串（新）或题库下标（旧格式兼容）。 */
+export function validateOverrides(overrides: unknown): asserts overrides is Record<string, number | string> {
   if (typeof overrides !== 'object' || overrides === null || Array.isArray(overrides))
     throw new Error('overrides 非法：必须为对象')
   for (const [k, v] of Object.entries(overrides)) {
     if (!/^\d+$/.test(k))
       throw new Error('overrides 非法：键必须为非负整数（dayIndex）')
-    if (typeof v !== 'string' || v.length === 0)
-      throw new Error('overrides 非法：值必须为非空字符串（答案）')
+    if (typeof v === 'number' ? (!Number.isInteger(v) || v < 0) : (typeof v !== 'string' || v.length === 0))
+      throw new Error('overrides 非法：值必须为非空字符串（答案）或非负整数（旧版下标）')
   }
 }
 

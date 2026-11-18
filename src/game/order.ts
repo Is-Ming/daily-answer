@@ -71,14 +71,20 @@ export function puzzleIndexOfDay(
   dayIndex: number,
   answers: readonly string[],
   epochs: Epoch[],
-  overrides: Record<string, string> = {},
+  overrides: Record<string, number | string> = {},
 ): number {
   const bankSize = answers.length
-  const pinnedAnswer = overrides[String(dayIndex)]
-  if (pinnedAnswer != null) {
-    const at = answers.indexOf(pinnedAnswer)
+  const pinned = overrides[String(dayIndex)]
+  if (pinned != null) {
+    // 新格式为答案字符串（与题库排序解耦）；数字为旧格式题库下标（兼容未重建的旧产物）
+    if (typeof pinned === 'number') {
+      if (!Number.isInteger(pinned) || pinned < 0 || pinned >= bankSize)
+        throw new Error(`override 非法: day${dayIndex} → ${pinned}（题库共 ${bankSize} 题）`)
+      return pinned
+    }
+    const at = answers.indexOf(pinned)
     if (at < 0)
-      throw new Error(`override 非法: day${dayIndex} → 「${pinnedAnswer}」（题库中不存在）`)
+      throw new Error(`override 非法: day${dayIndex} → 「${pinned}」（题库中不存在）`)
     return at
   }
   let picked = { idx: 0, epoch: epochs[0] }
