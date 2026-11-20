@@ -19,13 +19,13 @@
 
 ## 技术栈与硬约束
 
-- Vite + Vue 3 + TypeScript，**零第三方运行时依赖**（Vue 本身除外，不引 UI 库/路由/工具库），样式手写 CSS。
-- **体积预算：JS + CSS gzip < 150KB**（当前约 45KB）。
-- 构建产物为**纯静态文件**，`base: './'` 相对路径，可挂载在任意子路径。
-- 日期一律按 **Asia/Shanghai 日历日**计算，避免海外用户提前换题。
+- Vite + Vue 3 + TypeScript，运行时零第三方依赖（Vue 本身除外，不引 UI 库/路由/工具库），样式手写 CSS。
+- JS + CSS gzip 控制在 150KB 以内（当前约 45KB）。
+- 构建产物是纯静态文件，`base: './'` 相对路径，可挂载在任意子路径。
+- 日期一律按 Asia/Shanghai 日历日计算，避免海外用户提前换题。
 - 游戏规则全部是 `src/game/` 下的纯函数（零 DOM / 零持久化），vitest 全覆盖。
-- 本仓库不包含任何上报/统计的服务端实现——如需匿名统计，由部署方在页面注入
-  `window.__midiReporter` 运行时钩子即可（见 [统计接缝](#统计接缝)），游戏在无钩子时零网络请求。
+- 本仓库不包含任何上报/统计的服务端实现。如需匿名统计，由部署方在页面注入
+  `window.__midiReporter` 运行时钩子即可（见 [统计接缝](#统计接缝)）；没有这个钩子，游戏不发出任何网络请求。
 
 ## 快速开始
 
@@ -141,13 +141,15 @@ python tools/build_bank.py
 
 一次产出两个文件：
 
-- `public/data/puzzles.json` —— 题库成品，按 (类型, 拼音) 稳定排序以便 diff；
-- `public/data/epochs.json` —— 排期元数据（结构见下节）。
+- `public/data/puzzles.json`：题库成品，按 (类型, 拼音) 稳定排序以便 diff；
+- `public/data/epochs.json`：排期元数据（结构见下节）。
 
-**扩题流程**：直接往 `seed/` 加题 → 校验 → 构建。构建器自动完成：
+### 扩题流程
+
+直接往 `seed/` 加题 → 校验 → 构建。构建器自动完成：
 
 - 追加新 epoch（`since` = 构建当天），当日题目自动钉住不变；
-- 历史出题随冻结序列永久锁定，**加题插队绝不重写历史**；
+- 历史出题随冻结序列永久锁定，加题插队也不会重写历史；
 - 禁止删题、禁止改动已生效的 epoch/钉住（一律红灯）。
 
 ### 4. build_bank.py 参数
@@ -159,14 +161,14 @@ python tools/build_bank.py
 | `--prev <目录>` | `public/data/` | 上一版成品目录（读取题数与既有排期元数据） |
 | `--legacy-seq <文件>` | 无 | 一次性迁移：`{"<since>": [答案...]}`，为无冻结序列的旧 epoch 注入历史真实序列，长度必须等于对应 size |
 
-## 排期机制（全网同题的根基）
+## 排期机制：为什么全网每天是同一道题
 
 当日题 = `puzzles.json` 中的某一条，由 `src/game/order.ts` 的
 `puzzleIndexOfDay(dayIndex, answers, epochs, overrides)` 推导：
 
 1. `dayIndex` = 当天（上海日历日）与 `epochDate` 的天数差；
 2. 找到最后一个 `since ≤ dayIndex` 的 epoch；
-3. 若该 epoch 带 `seq`（冻结的答案序列）：**直接查表** `seq[(dayIndex - since) % size]`；
+3. 若该 epoch 带 `seq`（冻结的答案序列），直接查表：`seq[(dayIndex - since) % size]`；
 4. 旧产物无 `seq` 时回落 Fisher–Yates 洗牌推导（`xmur3` + `mulberry32` 纯整数运算）；
 5. `overrides` 命中的日子直接出钉住的题（当日扩题时自动写入）。
 
@@ -185,7 +187,7 @@ python tools/build_bank.py
 
 性质与红线：
 
-- `seq` 是构建期一次洗牌冻结的**答案字符串**序列，与题库排序/增删彻底解耦——
+- `seq` 是构建期一次洗牌冻结的答案字符串序列，与题库排序/增删彻底解耦：
   加题随便插，已出历史一个字都不会变；
 - 每轮（cycle）= `size` 天，轮内每题恰好出现一次，轮次循环复用同一序列；
 - 已生效 epoch 的 `since/size/seq` 永不改动（构建器红灯拦截）；
@@ -217,7 +219,7 @@ npm run preview    # 本地预览
 ### 统计接缝（可选）
 
 本仓库默认零上报、零网络请求。部署方如需匿名统计（局数/胜负/用时/提示数），
-在页面注入一个实现 `window.__midiReporter(ctx)` 的脚本即可——对局结束时前端会把
+在页面注入一个实现 `window.__midiReporter(ctx)` 的脚本即可。对局结束时前端会把
 上下文（期号、结果、次数等）传给它，是否上报、发往何处完全由部署方决定。
 接口失败静默，不影响游戏。字段白名单见 `src/report/index.ts`。
 
